@@ -8,9 +8,11 @@
 sh = require('sh')
 spotify = require('node-spotify')(appkeyFile: './spotify_appkey.key')
 
-class Player 
+class Player
   init: (username, password, cb) ->
     @volume = 50
+    @currentIdx = 0
+
     spotify.on(ready: =>
       for playlist in spotify.playlistContainer.getPlaylists()
         @updaterPlaylist = playlist if playlist.name == 'Updater'
@@ -19,14 +21,14 @@ class Player
         console.log 'Cannot find Updater playlist'
         spotify.logout()
       else
+        spotify.player.on(endOfTrack: @playNext)
         cb()
     )
     spotify.login(username, password, false, false)
 
-
   louder: ->
     @setVolume(@volume + 10)
-    
+
   quieter: ->
     @setVolume(@volume - 10)
 
@@ -39,32 +41,34 @@ class Player
     @volume = 100 if volume > 100
     sh("osascript -e 'set volume output volume #{@volume}'")
 
-  playNext: ->
+  playNext: =>
+    @currentIdx++
+    @play()
 
   playPrevious: ->
 
   resume: spotify.player.resume
   pause: spotify.player.pause
 
-  play: ->
-    @currentTrack = @updaterPlaylist.getTrack(0)
+  play: (track) ->
+    @currentTrack = if track? then spotify.createFromLink(track) else @updaterPlaylist.getTrack(@currentIdx)
     spotify.player.play(@currentTrack)
-    album = @currentTrack.album
-    console.log album.getCoverBase64()
 
-  search: (term) ->
-    search = new spotify.Search(term, 2, 10)
-
-  getCurrentTrackInfo: (cb) ->
-    return cb('No current track') unless @currentTrack?
-
-    cb(null, 
-      name: @currentTrack.name,
-      artist: @currentTrack.artists[0],
-      album: 
-        name: album.name
-        cover: 'data:image/jpeg;base64,' + album.getCoverBase64()
+  search: (term, cb) ->
+    search = new spotify.Search(term, 0, 5)
+    search.execute( (err, result) ->
+      cb(err) if err?
+      cb(null, result.tracks)
     )
+
+  getTrackInfo: (track)->
+    return unless track?
+
+    {
+      name: track.name,
+      artist: track.artists[0].name,
+      album: track.album.name
+    }
 
 
 
@@ -80,6 +84,9 @@ module.exports = (robot) ->
 
     robot.respond /spotify resume/i, (msg) ->
       player.resume()
+
+    robot.respond /spotify play (.*)/i, (msg) ->
+      player.play(msg.match[1])
 
     robot.respond /spotify play/i, (msg) ->
       player.play()
@@ -107,19 +114,20 @@ module.exports = (robot) ->
         console.log info.album.name
         console.log info.album.cover
 
-      
+
 
     # search through Spotify
-    robot.respond /spotify search ?(track|song|album|artist)? (.*)$/i, (msg) ->
-      
-      player.search()
+    # robot.respond /spotify search ?(track|song|album|artist)? (.*)$/i, (msg) ->
+    robot.respond /spotify search (.*)$/i, (msg) ->
 
-
+      player.search msg.match[1], (err, results) ->
+        for track in results
+          msg.reply "#{track.artists[0].name} - #{track.name} \n hubot spotify play #{track.link}"
 
 
   )
 
-  
+
 
   options = {}
   options.commands = [
