@@ -58,8 +58,10 @@ class Player
     @currentIdx--
     @play()
 
-  resume: spotify.player.resume
-  pause: spotify.player.pause
+  resume: ->
+   spotify.player.resume()
+  pause: ->
+    spotify.player.pause()
 
   addTrack: (track, buttIn=false) ->
     if @updaterPlaylist.numTracks > 0
@@ -102,7 +104,7 @@ module.exports = (robot) ->
 
   player = new Player
 
-  player.init('user', 'password', ->
+  player.init(process.env.SPOTIFY_USERNAME, process.env.SPOTIFY_PASSWORD, ->
 
     # @todo programtic prefix
     # robot.respond /spotify$/i, (msg) ->
@@ -117,7 +119,6 @@ module.exports = (robot) ->
       player.playNext() if msg.match[1] == 'play'
 
     robot.respond /spotify play$/i, (msg) ->
-      console.log 'playing'
       player.play()
 
     robot.respond /spotify (pause|stop)$/i, (msg) ->
