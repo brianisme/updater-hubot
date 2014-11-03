@@ -6,13 +6,15 @@
 # Examples:
 #
 sh = require('sh')
+request = require('request')
+dotenv = require('dotenv')
 spotify = require('node-spotify')(appkeyFile: './spotify_appkey.key')
 
 displayTrack = (track) ->
   "#{track.artists[0].name} - #{track.name}"
 
 class Player
-  init: (username, password, cb) ->
+  init: (username, password, api_key, cb) ->
     @volume = 50
     @currentIdx = 0
 
@@ -27,7 +29,9 @@ class Player
         spotify.player.on(endOfTrack: @playNext)
         cb()
     )
+
     spotify.login(username, password, false, false)
+    @radio = new Radio(api_key)
 
   louder: ->
     @setVolume(@volume + 10)
@@ -44,12 +48,30 @@ class Player
     @volume = 100 if volume > 100
     sh("osascript -e 'set volume output volume #{@volume}'")
 
+  getTrackFromRadio: (cb) ->
+    return cb('No current track') unless @currentTrack?
+    @radio.getTrack @currentTrack.artists[0].name, @currentTrack.name, (error, response, body) ->
+      return cb(error) if error?
+      console.log body
+      try
+        track_id = JSON.parse(body).response.songs[0].tracks[0].foreign_id
+      catch e
+       return cb("Radio: Cannot get track - #{body}")
+
+      cb(null, track_id)
+
   playNext: =>
     if @currentIdx >= @updaterPlaylist.numTracks - 1
-      @currentIdx = @updaterPlaylist.numTracks - 1
-      return
-    @currentIdx++
-    @play()
+      @getTrackFromRadio (err, track) =>
+        if err?
+          console.error "Failed to get track from Echo Nest: #{err}"
+          return
+        @currentIdx = @updaterPlaylist.numTracks - 1
+        @addTrack(track, true)
+        @play()
+    else
+      @currentIdx++
+      @play()
 
   playPrevious: ->
     if @currentIdx <= 0
@@ -97,14 +119,58 @@ class Player
       album: track.album.name
     }
 
+class Radio
+
+  constructor: (key) ->
+    @key = key
+
+  getTrackId: (artist, track, cb) ->
+    request(
+      useQuerystring: true
+      method: 'get'
+      uri: 'http://developer.echonest.com/api/v4/song/search'
+      qs:
+        api_key: @key
+        artist: artist
+        title: track
+        format: 'json'
+        results: 1
+      , cb
+    )
+
+  getTrack: (artist, track, cb) =>
+    console.log "Searching similar for: #{artist}"
+    @getTrackId artist, track, (error, response, body) =>
+      try
+        id = JSON.parse(body).response.songs[0].id
+      catch e
+       return cb("Radio: Cannot get track id - #{body}")
+      console.log id
+      request(
+        useQuerystring: true
+        method: 'get'
+        uri: 'http://developer.echonest.com/api/v4/playlist/static'
+        qs:
+          api_key: @key
+          # artist: artist
+          # type: 'artist'
+          song_id: id
+          type: 'song-radio'
+          bucket: ['id:spotify', 'tracks']
+          format: 'json'
+          results: 1
+          variety: 1
+          limit: true
+        , cb
+      )
 
 
 
 module.exports = (robot) ->
 
   player = new Player
-
-  player.init(process.env.SPOTIFY_USERNAME, process.env.SPOTIFY_PASSWORD, ->
+  dotenv.load()
+  player.init(process.env.SPOTIFY_USERNAME, process.env.SPOTIFY_PASSWORD, process.env.ECHONEST_API, ->
 
     # @todo programtic prefix
     # robot.respond /spotify$/i, (msg) ->
