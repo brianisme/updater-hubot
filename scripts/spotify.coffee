@@ -52,9 +52,8 @@ class Player
     return cb('No current track') unless @currentTrack?
     @radio.getTrack @currentTrack.artists[0].name, @currentTrack.name, (error, response, body) ->
       return cb(error) if error?
-      console.log body
       try
-        track_id = JSON.parse(body).response.songs[0].tracks[0].foreign_id
+        track_id = JSON.parse(body).response.songs[1].tracks[0].foreign_id
       catch e
        return cb("Radio: Cannot get track - #{body}")
 
@@ -66,9 +65,9 @@ class Player
         if err?
           console.error "Failed to get track from Echo Nest: #{err}"
           return
-        @currentIdx = @updaterPlaylist.numTracks - 1
+        console.log "get the track id from radio: " + track
         @addTrack(track, true)
-        @play()
+        @playNext()
     else
       @currentIdx++
       @play()
@@ -100,7 +99,7 @@ class Player
 
   play: (track) ->
     @currentTrack = if track? then spotify.createFromLink(track) else @updaterPlaylist.getTrack(@currentIdx)
-    console.log "playing #{displayTrack(@currentTrack)}"
+    # console.log "playing #{displayTrack(@currentTrack)}"
     spotify.player.play(@currentTrack)
 
   search: (term, cb) ->
@@ -139,13 +138,13 @@ class Radio
     )
 
   getTrack: (artist, track, cb) =>
-    console.log "Searching similar for: #{artist}"
     @getTrackId artist, track, (error, response, body) =>
       try
         id = JSON.parse(body).response.songs[0].id
       catch e
        return cb("Radio: Cannot get track id - #{body}")
-      console.log id
+
+      console.log "Searching similar for: #{artist} - #{track} (#{id})"
       request(
         useQuerystring: true
         method: 'get'
@@ -158,8 +157,10 @@ class Radio
           type: 'song-radio'
           bucket: ['id:spotify', 'tracks']
           format: 'json'
-          results: 1
+          results: 2
           variety: 1
+          adventurousness: 0.8
+          distribution: 'wandering'
           limit: true
         , cb
       )
