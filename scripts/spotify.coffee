@@ -6,7 +6,7 @@
 # Examples:
 #
 sh = require('sh')
-request = require('request')
+EchoNest = require('echo-nest')
 dotenv = require('dotenv')
 spotify = require('node-spotify')(appkeyFile: './spotify_appkey.key')
 
@@ -31,7 +31,7 @@ class Player
     )
 
     spotify.login(username, password, false, false)
-    @radio = new Radio(api_key)
+    @radio = new EchoNest(api_key)
 
   louder: ->
     @setVolume(@volume + 10)
@@ -63,9 +63,9 @@ class Player
     if @currentIdx >= @updaterPlaylist.numTracks - 1
       @getTrackFromRadio (err, track) =>
         if err?
-          console.error "Failed to get track from Echo Nest: #{err}"
+          console.error "Failed to get track from radio: #{err}"
           return
-        console.log "get the track id from radio: " + track
+        console.log "got the track id from radio: " + track
         @addTrack(track, true)
         @playNext()
     else
@@ -117,55 +117,6 @@ class Player
       artist: track.artists[0].name,
       album: track.album.name
     }
-
-class Radio
-
-  constructor: (key) ->
-    @key = key
-
-  getTrackId: (artist, track, cb) ->
-    request(
-      useQuerystring: true
-      method: 'get'
-      uri: 'http://developer.echonest.com/api/v4/song/search'
-      qs:
-        api_key: @key
-        artist: artist
-        title: track
-        format: 'json'
-        results: 1
-      , cb
-    )
-
-  getTrack: (artist, track, cb) =>
-    @getTrackId artist, track, (error, response, body) =>
-      try
-        id = JSON.parse(body).response.songs[0].id
-      catch e
-       return cb("Radio: Cannot get track id - #{body}")
-
-      console.log "Searching similar for: #{artist} - #{track} (#{id})"
-      request(
-        useQuerystring: true
-        method: 'get'
-        uri: 'http://developer.echonest.com/api/v4/playlist/static'
-        qs:
-          api_key: @key
-          # artist: artist
-          # type: 'artist'
-          song_id: id
-          type: 'song-radio'
-          bucket: ['id:spotify', 'tracks']
-          format: 'json'
-          results: 2
-          variety: 1
-          adventurousness: 0.8
-          distribution: 'wandering'
-          limit: true
-        , cb
-      )
-
-
 
 module.exports = (robot) ->
 
@@ -224,6 +175,9 @@ module.exports = (robot) ->
 
     # search through Spotify
     # robot.respond /spotify search ?(track|song|album|artist)? (.*)$/i, (msg) ->
+    robot.respond /spotify search (.*)$/i, (msg) ->
+
+
     robot.respond /spotify search (.*)$/i, (msg) ->
 
       player.search msg.match[1], (err, results) ->
