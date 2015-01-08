@@ -21,7 +21,7 @@ Wolfram = require('wolfram').createClient(process.env.HUBOT_WOLFRAM_APPID)
 module.exports = (robot) ->
   robot.respond /(question|wfa) (.*)$/i, (msg) ->
     Wolfram.query msg.match[2], (e, result) ->
-      # console.log result
+      console.log result
       if result and result.length > 0
         msg.send result[1]['subpods'][0]['value']
       else
