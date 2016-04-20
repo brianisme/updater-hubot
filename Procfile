@@ -1,1 +1,1 @@
-hubot: bin/hubot -a flowdock -n Hubot
+hubot: bin/hubot -a slack
